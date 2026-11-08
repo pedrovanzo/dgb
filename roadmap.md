@@ -4,13 +4,13 @@ Ordering principle: infrastructure first, then headless core, then browser, then
 
 Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 
-## Phase 0 — Scaffold `[~]`
+## Phase 0 — Scaffold `[x]`
 
 - Vite + React + TypeScript, Vitest, oxlint (Vite template default, replaces ESLint), Prettier, `.gitattributes` (LF line endings), Node 22 (`.nvmrc`).
 - GitHub Actions: CI (lint, typecheck, test) on every push; deploy to GitHub Pages from `main`.
 - **Why first:** deploy pipeline is easiest to debug while the app is trivial. Every later step is tested and shipped automatically.
 - **Done when:** hello page live at `https://pedrovanzo.github.io/dgb/`, CI green.
-- **Manual:** Settings → Pages → Source: "GitHub Actions".
+- **Manual:** none (Pages enabled with source "GitHub Actions" via API).
 
 ## Phase 1 — Core contract and test harness `[ ]`
 
