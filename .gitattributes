@@ -1,1 +1,5 @@
 * text=auto eol=lf
+*.gb binary
+*.gbc binary
+*.gba binary
+*.png binary

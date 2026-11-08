@@ -2,3 +2,5 @@ dist
 node_modules
 LICENSE
 package-lock.json
+test-roms
+test-output

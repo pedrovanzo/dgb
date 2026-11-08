@@ -12,12 +12,13 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Done when:** hello page live at `https://pedrovanzo.github.io/dgb/`, CI green.
 - **Manual:** none (Pages enabled with source "GitHub Actions" via API).
 
-## Phase 1 — Core contract and test harness `[ ]`
+## Phase 1 — Core contract and test harness `[x]`
 
 - `Core` interface (see CONTEXT.md).
 - Commit public test ROMs to `test-roms/`.
 - Headless runner: load ROM, run N frames, read serial output or framebuffer hash.
 - **Why:** tests before code. Every following step has an objective pass/fail.
+- **Delivered:** `src/cores/types.ts` (`Core`, `SerialDebug`), `src/cores/testing/` (harness, conformance catalog, Node helpers), Blargg/acid2/Mooneye ROMs in `test-roms/`.
 
 ## Phase 2 — DMG CPU, bus, timers, interrupts `[ ]`
 
