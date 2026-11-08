@@ -2,7 +2,7 @@
  * Headless conformance harness. Pure TypeScript: no Node or DOM APIs, so it
  * could also run in a worker. File access lives in `node.ts`.
  */
-import type { Core, Screen, SerialDebug } from '../types.ts'
+import type { BreakpointDebug, Core, Screen, SerialDebug } from '../types.ts'
 
 export type Verdict = 'pass' | 'fail' | 'running'
 
@@ -22,7 +22,10 @@ export const blarggDetector: SerialDetector = (output) => {
 const MOONEYE_PASS = [3, 5, 8, 13, 21, 34]
 const MOONEYE_FAIL = [0x42, 0x42, 0x42, 0x42, 0x42, 0x42]
 
-/** Mooneye ROMs send Fibonacci bytes on pass, six 0x42 bytes on fail. */
+/**
+ * Mooneye ROMs leave Fibonacci numbers in B, C, D, E, H, L on pass and 0x42 in
+ * all six on fail. Works on serial bytes or a breakpoint register snapshot.
+ */
 export const mooneyeDetector: SerialDetector = (output) => {
   if (output.length < 6) return 'running'
   const tail = Array.from(output.subarray(output.length - 6))
@@ -66,6 +69,34 @@ export function runUntilSerialVerdict(
   }
   const output = Uint8Array.from(chunks)
   return { verdict, frames, output, text: decoder.decode(output) }
+}
+
+export interface BreakpointRunResult {
+  verdict: Verdict
+  frames: number
+  /** Registers at the breakpoint that produced the verdict, if any. */
+  registers: Uint8Array | null
+}
+
+/**
+ * Runs until a software breakpoint yields a verdict or `maxFrames` elapse.
+ * Breakpoints the detector reports as `running` are ignored.
+ */
+export function runUntilBreakpointVerdict(
+  core: Core & BreakpointDebug,
+  detect: SerialDetector,
+  maxFrames: number,
+): BreakpointRunResult {
+  let frames = 0
+  while (frames < maxFrames) {
+    core.runFrame()
+    frames++
+    for (const registers of core.drainBreakpoints()) {
+      const verdict = detect(registers)
+      if (verdict !== 'running') return { verdict, frames, registers }
+    }
+  }
+  return { verdict: 'running', frames, registers: null }
 }
 
 export interface ScreenDiff {

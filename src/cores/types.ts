@@ -73,12 +73,21 @@ export interface Core {
 }
 
 /**
- * Optional debug surface. Test ROMs (Blargg, Mooneye) report results over the
+ * Optional debug surface. Blargg test ROMs report results over the
  * link/serial port, so headless tests need to read it.
  */
 export interface SerialDebug {
   /** Bytes written to the serial port since the last call. */
   drainSerial(): Uint8Array
+}
+
+/**
+ * Optional debug surface for software breakpoints. Mooneye ROMs execute
+ * `LD B,B` when done and leave the result in B, C, D, E, H, L.
+ */
+export interface BreakpointDebug {
+  /** Register snapshots (GB: [B, C, D, E, H, L]) per breakpoint since the last call. */
+  drainBreakpoints(): Uint8Array[]
 }
 
 export function hasSerialDebug(core: Core): core is Core & SerialDebug {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   acid2Cases,
   blarggCases,
-  MOONEYE_SERIAL_DIRS,
+  MOONEYE_AUTO_DIRS,
   mooneyeAppliesTo,
   type ConformanceCase,
 } from './conformance.ts'
@@ -32,8 +32,8 @@ describe('conformance catalog', () => {
     }
   })
 
-  it('finds Mooneye ROMs in every serial directory', () => {
-    for (const dir of MOONEYE_SERIAL_DIRS) {
+  it('finds Mooneye ROMs in every automated directory', () => {
+    for (const dir of MOONEYE_AUTO_DIRS) {
       expect(listTestRoms(dir).length).toBeGreaterThan(0)
     }
   })

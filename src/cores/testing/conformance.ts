@@ -6,7 +6,7 @@ import type { SystemId } from '../types.ts'
 
 export type ConformanceCase =
   | {
-      kind: 'blargg-serial' | 'mooneye-serial'
+      kind: 'blargg-serial' | 'mooneye-breakpoint'
       rom: string
       /** Upper bound before the run counts as a timeout. */
       maxFrames: number
@@ -105,13 +105,13 @@ export function mooneyeAppliesTo(rom: string, system: SystemId): boolean {
   return false
 }
 
-/** Mooneye subdirectories whose ROMs report over serial. */
-export const MOONEYE_SERIAL_DIRS = [
+/** Mooneye subdirectories whose ROMs report via the LD B,B breakpoint. */
+export const MOONEYE_AUTO_DIRS = [
   'mooneye/acceptance',
   'mooneye/emulator-only',
   'mooneye/misc',
 ]
 
 export function mooneyeCase(rom: string): ConformanceCase {
-  return { kind: 'mooneye-serial', rom, maxFrames: 1_200 }
+  return { kind: 'mooneye-breakpoint', rom, maxFrames: 1_200 }
 }

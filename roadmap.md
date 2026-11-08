@@ -20,11 +20,13 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Why:** tests before code. Every following step has an objective pass/fail.
 - **Delivered:** `src/cores/types.ts` (`Core`, `SerialDebug`), `src/cores/testing/` (harness, conformance catalog, Node helpers), Blargg/acid2/Mooneye ROMs in `test-roms/`.
 
-## Phase 2 — DMG CPU, bus, timers, interrupts `[ ]`
+## Phase 2 — DMG CPU, bus, timers, interrupts `[x]`
 
 - All LR35902 opcodes including the CB prefix; ROM-only cartridge.
 - **Done when:** Blargg `cpu_instrs` and `instr_timing` pass in Vitest.
 - **Why before PPU:** everything runs on the CPU. Blargg reports over serial, so no screen is needed.
+- **Delivered:** `src/cores/gb/` (CPU, bus, timer, serial, joypad, interrupts, timing-only PPU, ROM-only + MBC1 cartridges, `GameBoy` core). All 13 Blargg ROMs pass; 33 of 66 applicable Mooneye acceptance tests pass.
+- **Notes:** MBC1 pulled forward because every Blargg ROM uses it. Each M-cycle performs the bus access first, then advances peripherals (needed by `timer/rapid_toggle`). Mooneye results are read at the `LD B,B` breakpoint, because on DMG its serial timeout is shorter than a real transfer. Remaining Mooneye failures are tracked in `MOONEYE_KNOWN_FAILURES` in `src/cores/gb/gameboy.test.ts`, tagged by phase (OAM DMA and PPU timing: Phase 3; APU register masks: Phase 6).
 
 ## Phase 3 — DMG PPU `[ ]`
 

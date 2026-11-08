@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasSerialDebug,
+  type BreakpointDebug,
   type AudioChunk,
   type Core,
   type Screen,
@@ -10,6 +11,7 @@ import {
   blarggDetector,
   compareScreens,
   mooneyeDetector,
+  runUntilBreakpointVerdict,
   runUntilSerialVerdict,
 } from './harness.ts'
 
@@ -126,5 +128,38 @@ describe('compareScreens', () => {
     expect(() =>
       compareScreens(screen(1, 1, [0, 0, 0]), screen(2, 1, [0, 0, 0])),
     ).toThrow(/size mismatch/)
+  })
+})
+
+describe('runUntilBreakpointVerdict', () => {
+  const core = (snapshots: Record<number, number[][]>) => {
+    let frame = 0
+    let pending: Uint8Array[] = []
+    return {
+      runFrame() {
+        frame++
+        pending.push(...(snapshots[frame] ?? []).map((r) => Uint8Array.from(r)))
+      },
+      drainBreakpoints() {
+        const out = pending
+        pending = []
+        return out
+      },
+    } as unknown as Core & BreakpointDebug
+  }
+
+  it('ignores inconclusive breakpoints and stops on a verdict', () => {
+    const r = runUntilBreakpointVerdict(
+      core({ 2: [[0, 0, 0, 0, 0, 0]], 4: [[3, 5, 8, 13, 21, 34]] }),
+      mooneyeDetector,
+      10,
+    )
+    expect(r.verdict).toBe('pass')
+    expect(r.frames).toBe(4)
+  })
+
+  it('reports a timeout as running', () => {
+    const r = runUntilBreakpointVerdict(core({}), mooneyeDetector, 5)
+    expect(r).toEqual({ verdict: 'running', frames: 5, registers: null })
   })
 })
