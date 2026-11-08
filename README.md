@@ -10,15 +10,15 @@ A custom, web-first Game Boy Color / Game Boy Advance emulator — built to play
 
 ## Planned stack
 
-| Area | Choice |
-| --- | --- |
-| Core emulation | TypeScript (Rust + WebAssembly as a later option for GBA performance) |
-| Graphics | HTML5 Canvas 2D / WebGL (160×144 GBC, 240×160 GBA) |
-| Audio | Web Audio API (`AudioWorklet`) |
-| Input | Gamepad API + touch overlay for mobile |
-| Packaging | Progressive Web App |
-| Local storage | IndexedDB (ROMs and save RAM) |
-| Cloud sync | Lightweight backend (e.g. Supabase) storing save blobs keyed by user + game hash, newest timestamp wins |
+| Area           | Choice                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| Core emulation | TypeScript (Rust + WebAssembly as a later option for GBA performance)                                   |
+| Graphics       | HTML5 Canvas 2D / WebGL (160×144 GBC, 240×160 GBA)                                                      |
+| Audio          | Web Audio API (`AudioWorklet`)                                                                          |
+| Input          | Gamepad API + touch overlay for mobile                                                                  |
+| Packaging      | Progressive Web App                                                                                     |
+| Local storage  | IndexedDB (ROMs and save RAM)                                                                           |
+| Cloud sync     | Lightweight backend (e.g. Supabase) storing save blobs keyed by user + game hash, newest timestamp wins |
 
 ## Roadmap
 

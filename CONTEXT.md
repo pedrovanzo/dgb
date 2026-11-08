@@ -10,11 +10,11 @@ Baseline decisions from the initial design session (2026-11-08). Expect refineme
 
 ## Sync
 
-| Data | When | Rules |
-| --- | --- | --- |
-| Battery saves (`.sav`, ≤128 KB) | v1 | Newest timestamp wins; keep last 5 versions for rollback |
-| Save states | Later | Tagged with core version; incompatible versions ignored |
-| ROMs | v1 | Private Supabase Storage bucket, owner-only; deduped by SHA-1; never publicly served |
+| Data                            | When  | Rules                                                                                |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------ |
+| Battery saves (`.sav`, ≤128 KB) | v1    | Newest timestamp wins; keep last 5 versions for rollback                             |
+| Save states                     | Later | Tagged with core version; incompatible versions ignored                              |
+| ROMs                            | v1    | Private Supabase Storage bucket, owner-only; deduped by SHA-1; never publicly served |
 
 Local first: ROMs and saves live in IndexedDB; the app works offline and syncs when online.
 
