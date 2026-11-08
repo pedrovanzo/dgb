@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
+  acid2Cases,
   blarggCases,
   mooneyeAppliesTo,
   mooneyeCase,
 } from '../testing/conformance.ts'
 import {
   blarggDetector,
+  compareScreens,
   mooneyeDetector,
+  runFrames,
   runUntilBreakpointVerdict,
   runUntilSerialVerdict,
 } from '../testing/harness.ts'
-import { listTestRoms, readTestRom } from '../testing/node.ts'
+import {
+  listTestRoms,
+  readReferenceScreen,
+  readTestRom,
+  writeScreenPng,
+} from '../testing/node.ts'
 import { GameBoy } from './gameboy.ts'
 
 function boot(rom: string): GameBoy {
@@ -31,47 +39,42 @@ describe('Blargg (DMG)', () => {
   )
 })
 
+describe('Screen tests (DMG)', () => {
+  it.each(acid2Cases.dmg.map((c) => [c.rom, c]))('%s', (_, c) => {
+    if (c.kind !== 'screen') throw new Error('unexpected case kind')
+    const gb = boot(c.rom)
+    runFrames(gb, c.frames)
+    const actual = gb.getFramebuffers()[0]
+    const diff = compareScreens(actual, readReferenceScreen(c.reference))
+    if (diff.mismatches > 0) {
+      const name = c.rom.replace(/[/.]/g, '_')
+      const path = writeScreenPng(name, actual)
+      expect.fail(
+        `${diff.mismatches} pixels differ, first ${JSON.stringify(diff.first)}; actual saved to ${path}`,
+      )
+    }
+  })
+})
+
 /**
  * Mooneye acceptance tests not expected to pass yet. Each entry names the
  * phase that should fix it. `it.fails` turns an unexpected pass into a test
  * failure, so remove entries as features land.
  */
 const MOONEYE_KNOWN_FAILURES = new Map<string, string>([
-  // Instruction timing is measured with OAM DMA.
-  ['mooneye/acceptance/add_sp_e_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/call_cc_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/call_cc_timing2.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/call_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/call_timing2.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/jp_cc_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/jp_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/ld_hl_sp_e_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/push_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/ret_cc_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/ret_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/reti_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/rst_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/oam_dma/basic.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/oam_dma/sources-GS.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/oam_dma_restart.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/oam_dma_start.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/oam_dma_timing.gb', 'Phase 3: OAM DMA'],
-  ['mooneye/acceptance/ppu/hblank_ly_scx_timing-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/intr_1_2_timing-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/intr_2_0_timing.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/intr_2_mode0_timing.gb', 'Phase 3: PPU timing'],
+  ['mooneye/acceptance/oam_dma/sources-GS.gb', 'Phase 5: needs MBC5'],
   [
-    'mooneye/acceptance/ppu/intr_2_mode0_timing_sprites.gb',
-    'Phase 3: PPU timing',
+    'mooneye/acceptance/ppu/lcdon_timing-GS.gb',
+    'Deferred: PPU LCD-on edge cases',
   ],
-  ['mooneye/acceptance/ppu/intr_2_mode3_timing.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/intr_2_oam_ok_timing.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/lcdon_timing-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/lcdon_write_timing-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/stat_lyc_onoff.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/ppu/vblank_stat_intr-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/di_timing-GS.gb', 'Phase 3: PPU timing'],
-  ['mooneye/acceptance/halt_ime1_timing2-GS.gb', 'Phase 3: PPU timing'],
+  [
+    'mooneye/acceptance/ppu/lcdon_write_timing-GS.gb',
+    'Deferred: PPU LCD-on edge cases',
+  ],
+  [
+    'mooneye/acceptance/ppu/stat_lyc_onoff.gb',
+    'Deferred: PPU LCD-on edge cases',
+  ],
   [
     'mooneye/acceptance/bits/unused_hwio-GS.gb',
     'Phase 6: APU register masks/defaults',

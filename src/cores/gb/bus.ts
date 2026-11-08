@@ -27,21 +27,76 @@ export class Bus {
     this.cart = cart
   }
 
+  // --- OAM DMA ---
+  /** Next byte index to copy, or -1 when idle. */
+  private dmaIndex = -1
+  private dmaSource = 0
+  /** M-cycles until a requested transfer starts (0 = none pending). */
+  private dmaStartDelay = 0
+  private dmaPendingSource = 0
+  /** Byte currently on the bus the DMA is reading from. */
+  private dmaByte = 0xff
+
+  private get dmaActive(): boolean {
+    return this.dmaIndex >= 0
+  }
+
   tick(): void {
     this.cycles += 4
     const counter = this.timer.counter
     this.timer.tick()
     this.serial.tick(counter, this.timer.counter)
+    this.tickDma()
     this.ppu.tick()
   }
 
-  read(addr: number): number {
+  private tickDma(): void {
+    if (this.dmaActive) {
+      this.dmaByte = this.dmaRead(this.dmaSource + this.dmaIndex)
+      this.ppu.oam[this.dmaIndex] = this.dmaByte
+      if (++this.dmaIndex === 0xa0) this.dmaIndex = -1
+    }
+    if (this.dmaStartDelay > 0 && --this.dmaStartDelay === 0) {
+      this.dmaSource = this.dmaPendingSource
+      this.dmaIndex = 0
+    }
+  }
+
+  private startDma(value: number): void {
+    this.ppu.dma = value
+    this.dmaPendingSource = value << 8
+    this.dmaStartDelay = 2
+  }
+
+  /** DMA source read: sees memory regardless of PPU mode; 0xE000+ maps to WRAM. */
+  private dmaRead(addr: number): number {
     if (addr < 0x8000) return this.cart.readRom(addr)
     if (addr < 0xa000) return this.ppu.vram[addr - 0x8000]
     if (addr < 0xc000) return this.cart.readRam(addr)
+    return this.wram[addr & 0x1fff]
+  }
+
+  /**
+   * During DMA the CPU cannot use the bus the DMA reads from (VRAM bus or
+   * external bus); it sees the byte being transferred instead.
+   */
+  private dmaConflict(addr: number): boolean {
+    if (!this.dmaActive || addr >= 0xfe00) return false
+    const dmaOnVram = this.dmaSource >= 0x8000 && this.dmaSource < 0xa000
+    const cpuOnVram = addr >= 0x8000 && addr < 0xa000
+    return dmaOnVram === cpuOnVram
+  }
+
+  read(addr: number): number {
+    if (this.dmaConflict(addr)) return this.dmaByte
+    if (addr < 0x8000) return this.cart.readRom(addr)
+    if (addr < 0xa000)
+      return this.ppu.vramAccessible() ? this.ppu.vram[addr - 0x8000] : 0xff
+    if (addr < 0xc000) return this.cart.readRam(addr)
     if (addr < 0xe000) return this.wram[addr - 0xc000]
     if (addr < 0xfe00) return this.wram[addr - 0xe000]
-    if (addr < 0xfea0) return this.ppu.oam[addr - 0xfe00]
+    if (addr < 0xfea0)
+      return this.oamAccessible() ? this.ppu.oam[addr - 0xfe00] : 0xff
     if (addr < 0xff00) return 0x00
     if (addr < 0xff80) return this.readIo(addr)
     if (addr < 0xffff) return this.hram[addr - 0xff80]
@@ -49,16 +104,23 @@ export class Bus {
   }
 
   write(addr: number, value: number): void {
+    if (this.dmaConflict(addr)) return
     if (addr < 0x8000) this.cart.writeRom(addr, value)
-    else if (addr < 0xa000) this.ppu.vram[addr - 0x8000] = value
-    else if (addr < 0xc000) this.cart.writeRam(addr, value)
+    else if (addr < 0xa000) {
+      if (this.ppu.vramAccessible()) this.ppu.vram[addr - 0x8000] = value
+    } else if (addr < 0xc000) this.cart.writeRam(addr, value)
     else if (addr < 0xe000) this.wram[addr - 0xc000] = value
     else if (addr < 0xfe00) this.wram[addr - 0xe000] = value
-    else if (addr < 0xfea0) this.ppu.oam[addr - 0xfe00] = value
-    else if (addr < 0xff00) return
+    else if (addr < 0xfea0) {
+      if (this.oamAccessible()) this.ppu.oam[addr - 0xfe00] = value
+    } else if (addr < 0xff00) return
     else if (addr < 0xff80) this.writeIo(addr, value)
     else if (addr < 0xffff) this.hram[addr - 0xff80] = value
     else this.interrupts.enable = value
+  }
+
+  private oamAccessible(): boolean {
+    return !this.dmaActive && this.ppu.oamAccessible()
   }
 
   private readIo(addr: number): number {
@@ -144,8 +206,7 @@ export class Bus {
       case 0xff45:
         return ppu.writeLyc(value)
       case 0xff46:
-        ppu.dma = value // OAM DMA transfer arrives in Phase 3
-        return
+        return this.startDma(value)
       case 0xff47:
         ppu.bgp = value
         return

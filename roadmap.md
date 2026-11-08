@@ -28,10 +28,12 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Delivered:** `src/cores/gb/` (CPU, bus, timer, serial, joypad, interrupts, timing-only PPU, ROM-only + MBC1 cartridges, `GameBoy` core). All 13 Blargg ROMs pass; 33 of 66 applicable Mooneye acceptance tests pass.
 - **Notes:** MBC1 pulled forward because every Blargg ROM uses it. Each M-cycle performs the bus access first, then advances peripherals (needed by `timer/rapid_toggle`). Mooneye results are read at the `LD B,B` breakpoint, because on DMG its serial timeout is shorter than a real transfer. Remaining Mooneye failures are tracked in `MOONEYE_KNOWN_FAILURES` in `src/cores/gb/gameboy.test.ts`, tagged by phase (OAM DMA and PPU timing: Phase 3; APU register masks: Phase 6).
 
-## Phase 3 — DMG PPU `[ ]`
+## Phase 3 — DMG PPU `[x]`
 
 - Background, window, sprites, LY/STAT, OAM DMA.
-- **Done when:** `dmg-acid2` framebuffer hash matches reference, headless.
+- **Done when:** `dmg-acid2` framebuffer matches reference, headless.
+- **Delivered:** scanline renderer (BG, window with line counter, 10-sprite limit, DMG sprite priority, 8x16), double-buffered screen, variable mode 3 length (SCX, window, Pan Docs sprite penalty), VRAM/OAM access blocking, LY early increment and line-153 quirk, OAM DMA with bus conflicts. `dmg-acid2` matches pixel-for-pixel; 60 of 66 applicable Mooneye acceptance tests pass.
+- **Notes:** HALT wake-up adds no extra M-cycle. Deferred: `lcdon_timing-GS`, `lcdon_write_timing-GS`, `stat_lyc_onoff` (LCD-on edge cases, rarely relied on by games). `oam_dma/sources-GS` needs MBC5 (Phase 5).
 
 ## Phase 4 — Browser runner (first milestone) `[ ]`
 

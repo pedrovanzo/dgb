@@ -56,8 +56,8 @@ export class Cpu {
         bus.tick()
         return
       }
+      // Wake-up costs no extra cycle; IME=1 then dispatches normally.
       this.halted = false
-      bus.tick()
     }
 
     if (this.ime && bus.interrupts.pending() !== 0) {
