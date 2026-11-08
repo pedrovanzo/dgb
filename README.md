@@ -22,11 +22,21 @@ A custom, web-first Game Boy Color / Game Boy Advance emulator — built to play
 
 ## Roadmap
 
-1. **Chip-8** — proof of concept to nail the fetch → decode → execute loop.
-2. **Game Boy / Game Boy Color** — LR35902 CPU, memory map, PPU, timers, interrupts, audio.
-3. **PWA + save sync** — installable app, IndexedDB persistence, cloud sync of `.sav` data.
+1. **Game Boy (DMG)** — LR35902 CPU, memory map, PPU, timers, interrupts. First milestone: Blargg `cpu_instrs` passes and `dmg-acid2` renders correctly.
+2. **Game Boy Color** — double speed, color palettes, banking, then audio.
+3. **PWA + save sync** — installable app, IndexedDB persistence, GitHub-login-protected cloud sync via Supabase.
 4. **Game Boy Advance** — ARM7TDMI (ARM + Thumb), affine background modes, and the rest.
+5. **Maybe Nintendo DS** — the core interface is kept multi-screen and touch-ready for it.
 
-## Note
+See [CONTEXT.md](CONTEXT.md) for the full set of design decisions.
 
-No ROMs or BIOS files are included or distributed. Use only game dumps you legally own.
+## Disclaimer
+
+- dgb is a **personal, non-commercial hobby project**, built for the author's own use. It is not a product or service, and no support is offered.
+- **No ROMs, BIOS files, or other copyrighted game content** are included, hosted, or linked. Use only game dumps you legally own from cartridges you own.
+- dgb is not affiliated with, endorsed by, or sponsored by Nintendo. "Game Boy", "Game Boy Color", "Game Boy Advance", and "Nintendo DS" are trademarks of Nintendo, used here only to describe compatibility.
+- The software is provided "as is", without warranty of any kind. See [LICENSE](LICENSE).
+
+## License
+
+[GPL-3.0](LICENSE)
