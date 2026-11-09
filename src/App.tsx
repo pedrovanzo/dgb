@@ -12,7 +12,17 @@ const CONTROLS = [
 function App() {
   const screenHost = useRef<HTMLDivElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const { status, fps, load, togglePause, reset } = useEmulator(screenHost)
+  const saveInput = useRef<HTMLInputElement>(null)
+  const {
+    status,
+    fps,
+    savedAt,
+    load,
+    importSave,
+    exportSave,
+    togglePause,
+    reset,
+  } = useEmulator(screenHost)
   const [dragging, setDragging] = useState(false)
 
   const onDrop = (e: DragEvent) => {
@@ -23,6 +33,15 @@ function App() {
   }
 
   const active = status.kind === 'running' || status.kind === 'paused'
+  const battery = active && status.battery
+
+  const saveNote = !battery
+    ? ''
+    : savedAt
+      ? ` · saved ${new Date(savedAt).toLocaleTimeString()}`
+      : status.restored
+        ? ' · save restored'
+        : ' · new save'
 
   return (
     <main
@@ -56,6 +75,33 @@ function App() {
         <button type="button" onClick={reset} disabled={!active}>
           Reset
         </button>
+        <button type="button" onClick={exportSave} disabled={!battery}>
+          Export .sav
+        </button>
+        <button
+          type="button"
+          onClick={() => saveInput.current?.click()}
+          disabled={!battery}
+        >
+          Import .sav
+        </button>
+        <input
+          ref={saveInput}
+          type="file"
+          accept=".sav"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (
+              file &&
+              confirm(
+                'Replace the current save with this file? The game resets.',
+              )
+            )
+              void importSave(file)
+            e.target.value = ''
+          }}
+        />
       </header>
 
       <div className="screen-host" ref={screenHost} />
@@ -63,7 +109,7 @@ function App() {
       <p className="status" role="status">
         {status.kind === 'idle' && 'Open a .gb file or drop it here.'}
         {active &&
-          `${status.title}${status.kind === 'paused' ? ' (paused)' : ''} · ${fps.toFixed(1)} fps`}
+          `${status.title}${status.kind === 'paused' ? ' (paused)' : ''} · ${fps.toFixed(1)} fps${saveNote}`}
         {status.kind === 'error' && `Error: ${status.message}`}
       </p>
       {active && status.warning && <p className="warning">{status.warning}</p>}

@@ -41,10 +41,12 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Done when:** `dmg-acid2` renders correctly in the browser on PC.
 - **Delivered:** `src/runner/`. The worker owns the core and the canvas. `FramePacer` holds 59.73 fps on 60/75/120/144 Hz displays. Keyboard is bound by physical key. Open ROM button or drag-and-drop, pause/reset, FPS readout, auto-pause on hidden tab. Verified in headless Chrome: `dmg-acid2` renders correctly at ~59 fps.
 
-## Phase 5 — Cartridges and battery saves `[ ]`
+## Phase 5 — Cartridges and battery saves `[x]`
 
 - MBC1, MBC3 (+ RTC), MBC5. Battery RAM persisted to IndexedDB. Relevant Mooneye tests.
 - **Why here:** real games boot and save. Sync later depends on this.
+- **Delivered:** MBC1 (+ MBC1M multicart), MBC2, MBC3 (+ RTC, MBC30 banks), MBC5 (+ rumble carts, no motor). Saves use the BGB/VBA-M `.sav` format: raw RAM, plus a 48-byte RTC footer on timer carts, so saves move to and from other emulators. The RTC follows emulated time while running and catches up with real time on load. `src/storage/saves.ts` stores saves in IndexedDB keyed by ROM SHA-1. The worker writes changed RAM every second and on pause or hidden tab. Each play session checkpoints the previous save into a 5-version history. The UI adds Import/Export `.sav` and a "saved" indicator. All 28 Mooneye MBC1/MBC2/MBC5 tests pass, plus `oam_dma/sources-GS`. MBC3/RTC is covered by unit tests (no Mooneye suite exists for it). A browser smoke test confirmed that a save survives a page reload.
+- **Not supported:** MMM01, HuC1, HuC3, MBC6, MBC7, TAMA5, Pocket Camera. Each shows a named error.
 
 ## Phase 6 — APU (audio) `[ ]`
 

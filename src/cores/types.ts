@@ -64,9 +64,15 @@ export interface Core {
   drainAudio(): AudioChunk
   setInput(input: InputState): void
 
-  /** Battery-backed cartridge RAM, or `null` if the cartridge has none. */
+  /**
+   * Battery-backed cartridge data in the system's usual save-file format
+   * (GB: `.sav`, with the RTC footer on timer carts), or `null` if the
+   * cartridge has no battery.
+   */
   getSaveRam(): Uint8Array | null
   setSaveRam(data: Uint8Array): void
+  /** True once after battery-backed data changed since the last call. */
+  consumeSaveDirty(): boolean
 
   serialize(): Uint8Array
   deserialize(state: Uint8Array): void

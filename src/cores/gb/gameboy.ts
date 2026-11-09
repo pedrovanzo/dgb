@@ -13,6 +13,11 @@ import { Cpu } from './cpu.ts'
 export const CLOCK_HZ = 4_194_304
 export const CYCLES_PER_FRAME = 70_224
 
+export interface GameBoyOptions {
+  /** Wall clock in ms since the Unix epoch, for the MBC3 RTC (tests inject one). */
+  now?: () => number
+}
+
 /** Original Game Boy (DMG). Starts in post-boot-ROM state; no boot ROM needed. */
 export class GameBoy implements Core, SerialDebug, BreakpointDebug {
   readonly system = 'dmg' as const
@@ -24,6 +29,11 @@ export class GameBoy implements Core, SerialDebug, BreakpointDebug {
   private cpu: Cpu | null = null
   private frameEnd = 0
   private breakpoints: Uint8Array[] = []
+  private readonly now: () => number
+
+  constructor(options: GameBoyOptions = {}) {
+    this.now = options.now ?? (() => Date.now())
+  }
 
   loadRom(rom: Uint8Array): void {
     this.rom = rom
@@ -32,7 +42,14 @@ export class GameBoy implements Core, SerialDebug, BreakpointDebug {
 
   reset(): void {
     if (!this.rom) throw new Error('No ROM loaded')
-    const bus = new Bus(createCartridge(this.rom))
+    // Battery-backed data survives a reset, like on a real cartridge.
+    const save = this.bus?.cart.saveData() ?? null
+    let bus: Bus | null = null
+    const cart = createCartridge(this.rom, {
+      clock: { cycles: () => bus?.cycles ?? 0, now: this.now },
+    })
+    bus = new Bus(cart)
+    if (save) cart.loadSaveData(save)
     bus.timer.counter = 0xabcc // DIV state at 0x0100 on DMG A/B/C
     this.bus = bus
     const cpu = new Cpu(bus)
@@ -64,13 +81,15 @@ export class GameBoy implements Core, SerialDebug, BreakpointDebug {
   }
 
   getSaveRam(): Uint8Array | null {
-    const cart = this.machine().bus.cart
-    return cart.header.battery && cart.ram.length ? cart.ram.slice() : null
+    return this.machine().bus.cart.saveData()
   }
 
   setSaveRam(data: Uint8Array): void {
-    const ram = this.machine().bus.cart.ram
-    ram.set(data.subarray(0, ram.length))
+    this.machine().bus.cart.loadSaveData(data)
+  }
+
+  consumeSaveDirty(): boolean {
+    return this.machine().bus.cart.consumeDirty()
   }
 
   serialize(): Uint8Array {

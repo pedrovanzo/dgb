@@ -2,16 +2,29 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { KeyboardInput } from './keymap.ts'
 import type { FromWorker, ToWorker } from './protocol.ts'
 
+export interface GameInfo {
+  title: string
+  /** Cartridge has battery-backed saves. */
+  battery: boolean
+  /** A stored save was restored on load. */
+  restored: boolean
+  warning?: string
+}
+
 export type EmulatorStatus =
   | { kind: 'idle' }
-  | { kind: 'running'; title: string; warning?: string }
-  | { kind: 'paused'; title: string; warning?: string }
+  | ({ kind: 'running' } & GameInfo)
+  | ({ kind: 'paused' } & GameInfo)
   | { kind: 'error'; message: string }
 
 export interface Emulator {
   status: EmulatorStatus
   fps: number
+  /** Time of the last save written to the browser, if any this session. */
+  savedAt: number | null
   load(file: Blob): Promise<void>
+  importSave(file: Blob): Promise<void>
+  exportSave(): void
   togglePause(): void
   reset(): void
 }
@@ -26,6 +39,7 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
   const workerRef = useRef<Worker | null>(null)
   const [status, setStatus] = useState<EmulatorStatus>({ kind: 'idle' })
   const [fps, setFps] = useState(0)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
   const userPaused = useRef(false)
 
   const send = useCallback((msg: ToWorker, transfer: Transferable[] = []) => {
@@ -47,13 +61,32 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
     workerRef.current = worker
     worker.onmessage = (event: MessageEvent<FromWorker>) => {
       const msg = event.data
-      if (msg.type === 'loaded') {
-        userPaused.current = false
-        setStatus({ kind: 'running', title: msg.title, warning: msg.warning })
-      } else if (msg.type === 'error') {
-        setStatus({ kind: 'error', message: msg.message })
-        setFps(0)
-      } else setFps(msg.fps)
+      switch (msg.type) {
+        case 'loaded':
+          userPaused.current = false
+          setSavedAt(null)
+          setStatus({
+            kind: 'running',
+            title: msg.title,
+            battery: msg.battery,
+            restored: msg.restored,
+            warning: msg.warning,
+          })
+          return
+        case 'error':
+          setStatus({ kind: 'error', message: msg.message })
+          setFps(0)
+          return
+        case 'stats':
+          setFps(msg.fps)
+          return
+        case 'saved':
+          setSavedAt(msg.at)
+          return
+        case 'save-data':
+          download(new Blob([msg.data]), `${msg.title || 'save'}.sav`)
+          return
+      }
     }
     const offscreen = canvas.transferControlToOffscreen()
     worker.postMessage({ type: 'init', canvas: offscreen } satisfies ToWorker, [
@@ -79,11 +112,12 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
     const onBlur = () => {
       if (keyboard.clear()) sendButtons()
     }
+    // Hidden tabs pause, which also flushes the save to IndexedDB.
     const onVisibility = () => {
-      if (userPaused.current) return
-      worker.postMessage({
-        type: document.hidden ? 'pause' : 'resume',
-      } satisfies ToWorker)
+      if (document.hidden)
+        worker.postMessage({ type: 'pause' } satisfies ToWorker)
+      else if (!userPaused.current)
+        worker.postMessage({ type: 'resume' } satisfies ToWorker)
     }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
@@ -103,11 +137,23 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
 
   const load = useCallback(
     async (file: Blob) => {
+      // Ask the browser not to evict saves under storage pressure.
+      void navigator.storage?.persist?.()
       const rom = await file.arrayBuffer()
       send({ type: 'load', rom }, [rom])
     },
     [send],
   )
+
+  const importSave = useCallback(
+    async (file: Blob) => {
+      const data = await file.arrayBuffer()
+      send({ type: 'import-save', data }, [data])
+    },
+    [send],
+  )
+
+  const exportSave = useCallback(() => send({ type: 'export-save' }), [send])
 
   const togglePause = useCallback(() => {
     // Side effects stay outside the state updater (StrictMode runs it twice).
@@ -124,5 +170,23 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
 
   const reset = useCallback(() => send({ type: 'reset' }), [send])
 
-  return { status, fps, load, togglePause, reset }
+  return {
+    status,
+    fps,
+    savedAt,
+    load,
+    importSave,
+    exportSave,
+    togglePause,
+    reset,
+  }
+}
+
+function download(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

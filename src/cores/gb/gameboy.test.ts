@@ -62,7 +62,6 @@ describe('Screen tests (DMG)', () => {
  * failure, so remove entries as features land.
  */
 const MOONEYE_KNOWN_FAILURES = new Map<string, string>([
-  ['mooneye/acceptance/oam_dma/sources-GS.gb', 'Phase 5: needs MBC5'],
   [
     'mooneye/acceptance/ppu/lcdon_timing-GS.gb',
     'Deferred: PPU LCD-on edge cases',
@@ -85,11 +84,11 @@ const MOONEYE_KNOWN_FAILURES = new Map<string, string>([
   ],
 ])
 
-const mooneyeRoms = listTestRoms('mooneye/acceptance').filter((rom) =>
-  mooneyeAppliesTo(rom, 'dmg'),
-)
+const mooneyeRoms = ['mooneye/acceptance', 'mooneye/emulator-only']
+  .flatMap((dir) => listTestRoms(dir))
+  .filter((rom) => mooneyeAppliesTo(rom, 'dmg'))
 
-describe('Mooneye acceptance (DMG)', () => {
+describe('Mooneye acceptance and MBC tests (DMG)', () => {
   for (const rom of mooneyeRoms) {
     const reason = MOONEYE_KNOWN_FAILURES.get(rom)
     const test = reason ? it.fails : it

@@ -47,6 +47,9 @@ class FakeCore implements Core, SerialDebug {
     return null
   }
   setSaveRam(): void {}
+  consumeSaveDirty(): boolean {
+    return false
+  }
   serialize(): Uint8Array {
     return new Uint8Array()
   }
