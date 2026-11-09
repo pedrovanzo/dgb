@@ -4,7 +4,7 @@ Freely redistributable homebrew test ROMs used for headless conformance tests. T
 
 | Folder     | Suite                                                                      | Author                     | License                                   | Pass signal                                          |
 | ---------- | -------------------------------------------------------------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------------------- |
-| `blargg/`  | `cpu_instrs`, `instr_timing` (via [retrio/gb-test-roms](https://github.com/retrio/gb-test-roms)) | Shay Green (blargg) | Freely distributed by the author for emulator testing | Serial text `Passed` / `Failed`                      |
+| `blargg/`  | `cpu_instrs`, `instr_timing`, `dmg_sound` (via [retrio/gb-test-roms](https://github.com/retrio/gb-test-roms)) | Shay Green (blargg) | Freely distributed by the author for emulator testing | Serial text `Passed` / `Failed`; `dmg_sound`: status at `0xA000` after signature `DE B0 61` (0 = pass) |
 | `acid2/`   | [dmg-acid2](https://github.com/mattcurrie/dmg-acid2) v1.0, [cgb-acid2](https://github.com/mattcurrie/cgb-acid2) v1.1 | Matt Currie | MIT (`LICENSE-*`)                         | Screen matches `*.reference.png`                     |
 | `mooneye/` | [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite) build `mts-20260714-0944-31510e1` | Joonas Javanainen | MIT (`mooneye/LICENSE`)                   | At `LD B,B`: B C D E H L = `3 5 8 13 21 34` (pass), `0x42`×6 (fail) |
 

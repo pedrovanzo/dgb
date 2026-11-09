@@ -17,6 +17,8 @@ function App() {
     status,
     fps,
     savedAt,
+    volume,
+    setVolume,
     load,
     importSave,
     exportSave,
@@ -103,6 +105,19 @@ function App() {
           }}
         />
       </header>
+
+      <label className="volume">
+        Volume
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          onChange={(e) => setVolume(Number(e.target.value))}
+        />
+        {Math.round(volume * 100)}%
+      </label>
 
       <div className="screen-host" ref={screenHost} />
 

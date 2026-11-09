@@ -2,7 +2,7 @@ import { createCore } from '../cores/index.ts'
 import type { Core } from '../cores/types.ts'
 import { SaveStore, sha1Hex } from '../storage/saves.ts'
 import { FramePacer } from './pacer.ts'
-import type { FromWorker, ToWorker } from './protocol.ts'
+import type { AudioPortMessage, FromWorker, ToWorker } from './protocol.ts'
 
 /**
  * Emulator worker: owns the core and the OffscreenCanvas, paces frames, draws
@@ -29,9 +29,24 @@ let loopScheduled = false
 let framesThisSecond = 0
 let statsStart = 0
 
+let audioPort: MessagePort | null = null
+
 let store: Promise<SaveStore | null> | null = null
 /** Serializes IndexedDB writes so an older save never lands last. */
 let writes: Promise<void> = Promise.resolve()
+
+function sendAudio(msg: AudioPortMessage): void {
+  if (!audioPort) return
+  if (msg === 'clear') audioPort.postMessage(msg)
+  else audioPort.postMessage(msg, [msg.buffer])
+}
+
+/** Forwards samples produced since the last call (or drops them). */
+function flushAudio(): void {
+  if (!game) return
+  const { samples } = game.core.drainAudio()
+  if (samples.length) sendAudio(samples)
+}
 
 function post(msg: FromWorker, transfer: Transferable[] = []): void {
   scope.postMessage(msg, transfer)
@@ -94,7 +109,10 @@ function loop(now: number): void {
     post({ type: 'error', message: errorMessage(err) })
     return
   }
-  if (frames > 0) draw()
+  if (frames > 0) {
+    draw()
+    flushAudio()
+  }
   framesThisSecond += frames
   if (now - statsStart >= 1000) {
     post({ type: 'stats', fps: (framesThisSecond * 1000) / (now - statsStart) })
@@ -133,6 +151,7 @@ function restartClock(): void {
 async function load(buffer: ArrayBuffer): Promise<void> {
   await persist()
   game = null
+  sendAudio('clear')
   const rom = new Uint8Array(buffer)
   const sha1 = await sha1Hex(rom)
   const created = createCore(rom)
@@ -169,6 +188,9 @@ scope.onmessage = async (event: MessageEvent<ToWorker>) => {
       case 'init':
         ctx = msg.canvas.getContext('2d', { alpha: false })
         return
+      case 'audio-port':
+        audioPort = msg.port
+        return
       case 'load':
         return await load(msg.rom)
       case 'input':
@@ -176,6 +198,7 @@ scope.onmessage = async (event: MessageEvent<ToWorker>) => {
         return
       case 'pause':
         paused = true
+        sendAudio('clear')
         return await persist()
       case 'resume':
         paused = false
@@ -183,6 +206,7 @@ scope.onmessage = async (event: MessageEvent<ToWorker>) => {
         requestLoop()
         return
       case 'reset':
+        sendAudio('clear')
         game?.core.reset()
         restartClock()
         requestLoop()

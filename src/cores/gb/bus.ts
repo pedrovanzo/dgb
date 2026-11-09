@@ -1,3 +1,4 @@
+import { Apu } from './apu.ts'
 import type { Cartridge } from './cartridge.ts'
 import { Interrupts } from './interrupts.ts'
 import { Joypad } from './joypad.ts'
@@ -17,8 +18,7 @@ export class Bus {
   readonly ppu = new Ppu(this.interrupts)
   readonly wram = new Uint8Array(0x2000)
   readonly hram = new Uint8Array(0x7f)
-  /** Raw APU register storage (0xFF10-0xFF3F) until the APU lands in Phase 6. */
-  readonly apu = new Uint8Array(0x30)
+  readonly apu = new Apu()
   readonly cart: Cartridge
   /** Total T-cycles elapsed since power-on. */
   cycles = 0
@@ -46,6 +46,7 @@ export class Bus {
     const counter = this.timer.counter
     this.timer.tick()
     this.serial.tick(counter, this.timer.counter)
+    this.apu.tick(counter, this.timer.counter)
     this.tickDma()
     this.ppu.tick()
   }
@@ -167,7 +168,7 @@ export class Bus {
       case 0xff4b:
         return ppu.wx
     }
-    if (addr >= 0xff10 && addr < 0xff40) return this.apu[addr - 0xff10]
+    if (addr >= 0xff10 && addr < 0xff40) return this.apu.read(addr)
     return 0xff
   }
 
@@ -181,8 +182,11 @@ export class Bus {
         return
       case 0xff02:
         return this.serial.writeSc(value)
-      case 0xff04:
-        return this.timer.writeDiv()
+      case 0xff04: {
+        const before = this.timer.counter
+        this.timer.writeDiv()
+        return this.apu.divReset(before)
+      }
       case 0xff05:
         return this.timer.writeTima(value)
       case 0xff06:
@@ -223,6 +227,6 @@ export class Bus {
         ppu.wx = value
         return
     }
-    if (addr >= 0xff10 && addr < 0xff40) this.apu[addr - 0xff10] = value
+    if (addr >= 0xff10 && addr < 0xff40) this.apu.write(addr, value)
   }
 }

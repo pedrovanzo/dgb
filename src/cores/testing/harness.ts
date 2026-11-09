@@ -2,7 +2,13 @@
  * Headless conformance harness. Pure TypeScript: no Node or DOM APIs, so it
  * could also run in a worker. File access lives in `node.ts`.
  */
-import type { BreakpointDebug, Core, Screen, SerialDebug } from '../types.ts'
+import type {
+  BreakpointDebug,
+  Core,
+  MemoryDebug,
+  Screen,
+  SerialDebug,
+} from '../types.ts'
 
 export type Verdict = 'pass' | 'fail' | 'running'
 
@@ -32,6 +38,53 @@ export const mooneyeDetector: SerialDetector = (output) => {
   if (tail.every((b, i) => b === MOONEYE_PASS[i])) return 'pass'
   if (tail.every((b, i) => b === MOONEYE_FAIL[i])) return 'fail'
   return 'running'
+}
+
+export interface MemoryRunResult {
+  verdict: Verdict
+  frames: number
+  /** Result code at 0xA000 (0 = pass), or -1 if never reported. */
+  code: number
+  /** Text the ROM printed to 0xA004. */
+  text: string
+}
+
+/**
+ * Blargg memory protocol: once 0xA001-0xA003 hold DE B0 61, 0xA000 is the
+ * status (0x80 while running, then the result code; 0 = pass) and 0xA004 a
+ * zero-terminated text log.
+ */
+export function runUntilMemoryVerdict(
+  core: Core & MemoryDebug,
+  maxFrames: number,
+): MemoryRunResult {
+  const signed = () =>
+    core.peek(0xa001) === 0xde &&
+    core.peek(0xa002) === 0xb0 &&
+    core.peek(0xa003) === 0x61
+  let frames = 0
+  let code = -1
+  while (frames < maxFrames) {
+    core.runFrame()
+    frames++
+    if (frames % 10 !== 0 || !signed()) continue
+    const status = core.peek(0xa000)
+    if (status !== 0x80) {
+      code = status
+      break
+    }
+  }
+  let text = ''
+  if (signed()) {
+    for (let a = 0xa004; a < 0xc000; a++) {
+      const c = core.peek(a)
+      if (c === 0) break
+      text += String.fromCharCode(c)
+    }
+  }
+  const verdict: Verdict =
+    code === -1 ? 'running' : code === 0 ? 'pass' : 'fail'
+  return { verdict, frames, code, text }
 }
 
 export interface SerialRunResult {

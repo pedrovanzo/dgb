@@ -1,8 +1,13 @@
 import type { Button, SystemId } from '../cores/types.ts'
 
+/** Worker -> AudioWorklet: interleaved stereo samples, or `'clear'` on pause. */
+export type AudioPortMessage = Float32Array | 'clear'
+
 /** Messages from the UI thread to the emulator worker. */
 export type ToWorker =
   | { type: 'init'; canvas: OffscreenCanvas }
+  /** Direct channel to the AudioWorklet. */
+  | { type: 'audio-port'; port: MessagePort }
   | { type: 'load'; rom: ArrayBuffer }
   | { type: 'input'; buttons: Button[] }
   | { type: 'pause' }

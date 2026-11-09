@@ -48,10 +48,12 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Delivered:** MBC1 (+ MBC1M multicart), MBC2, MBC3 (+ RTC, MBC30 banks), MBC5 (+ rumble carts, no motor). Saves use the BGB/VBA-M `.sav` format: raw RAM, plus a 48-byte RTC footer on timer carts, so saves move to and from other emulators. The RTC follows emulated time while running and catches up with real time on load. `src/storage/saves.ts` stores saves in IndexedDB keyed by ROM SHA-1. The worker writes changed RAM every second and on pause or hidden tab. Each play session checkpoints the previous save into a 5-version history. The UI adds Import/Export `.sav` and a "saved" indicator. All 28 Mooneye MBC1/MBC2/MBC5 tests pass, plus `oam_dma/sources-GS`. MBC3/RTC is covered by unit tests (no Mooneye suite exists for it). A browser smoke test confirmed that a save survives a page reload.
 - **Not supported:** MMM01, HuC1, HuC3, MBC6, MBC7, TAMA5, Pocket Camera. Each shows a named error.
 
-## Phase 6 — APU (audio) `[ ]`
+## Phase 6 — APU (audio) `[x]`
 
 - 4 channels, `AudioWorklet` fed by a ring buffer.
 - **Why late:** audio exposes timing bugs; easier once CPU and PPU are solid.
+- **Delivered:** `src/cores/gb/apu.ts` has 2 squares (one with sweep), wave and noise, a DIV-clocked frame sequencer (including the DIV-write edge), DMG power-off rules, wave RAM access while playing, retrigger corruption and post-boot register state. The mixer averages at 262 kHz, outputs 48 kHz stereo and applies a DC-blocking high-pass. All 12 Blargg `dmg_sound` tests pass. Mooneye `unused_hwio-GS` and `boot_hwio-dmgABCmgb` now pass too. The worker sends samples straight to an `AudioWorklet` over a `MessageChannel`, so `SharedArrayBuffer` is not needed (GitHub Pages can't send COOP/COEP headers). `AudioRing` prebuffers 60 ms and nudges the playback rate by up to ±0.5% to follow the clock drift between display and audio device. Volume slider, saved in `localStorage`. A headless Chrome smoke test measured a 440 Hz test tone at 439.5 Hz.
+- **Notes:** the APU costs ~35% of emulation time (~1,100 fps headless on PC, ~19x realtime). Revisit in the performance pass if phones struggle. Blargg dmg_sound ROMs report through cartridge RAM at `0xA000`, read by `runUntilMemoryVerdict`.
 
 ## Phase 7 — GBC `[ ]`
 

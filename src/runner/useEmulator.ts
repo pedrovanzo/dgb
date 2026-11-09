@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { AudioOutput } from './audio-output.ts'
 import { KeyboardInput } from './keymap.ts'
 import type { FromWorker, ToWorker } from './protocol.ts'
 
@@ -22,6 +23,9 @@ export interface Emulator {
   fps: number
   /** Time of the last save written to the browser, if any this session. */
   savedAt: number | null
+  /** 0-1. */
+  volume: number
+  setVolume(volume: number): void
   load(file: Blob): Promise<void>
   importSave(file: Blob): Promise<void>
   exportSave(): void
@@ -41,6 +45,9 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
   const [fps, setFps] = useState(0)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const userPaused = useRef(false)
+  const audioRef = useRef<AudioOutput | null>(null)
+  const [volume, setVolumeState] = useState(loadVolume)
+  const volumeRef = useRef(volume)
 
   const send = useCallback((msg: ToWorker, transfer: Transferable[] = []) => {
     workerRef.current?.postMessage(msg, transfer)
@@ -93,6 +100,29 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
       offscreen,
     ])
 
+    const audio = new AudioOutput()
+    audioRef.current = audio
+    audio.setVolume(volumeRef.current)
+    void audio
+      .port()
+      .then((port) =>
+        worker.postMessage({ type: 'audio-port', port } satisfies ToWorker, [
+          port,
+        ]),
+      )
+      .catch((err: unknown) => {
+        // A StrictMode remount closes the context mid-load; that is expected.
+        if (audioRef.current !== audio) return
+        console.warn(
+          'Audio unavailable:',
+          err instanceof Error ? err.message : err,
+        )
+      })
+    // Audio may only start after a user gesture.
+    const unlockAudio = () => audio.resume()
+    window.addEventListener('pointerdown', unlockAudio)
+    window.addEventListener('keydown', unlockAudio)
+
     const keyboard = new KeyboardInput()
     const sendButtons = () =>
       worker.postMessage({
@@ -129,6 +159,10 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('keydown', unlockAudio)
+      audio.close()
+      audioRef.current = null
       worker.terminate()
       workerRef.current = null
       canvas.remove()
@@ -139,6 +173,7 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
     async (file: Blob) => {
       // Ask the browser not to evict saves under storage pressure.
       void navigator.storage?.persist?.()
+      audioRef.current?.resume()
       const rom = await file.arrayBuffer()
       send({ type: 'load', rom }, [rom])
     },
@@ -170,15 +205,39 @@ export function useEmulator(host: RefObject<HTMLElement | null>): Emulator {
 
   const reset = useCallback(() => send({ type: 'reset' }), [send])
 
+  const setVolume = useCallback((v: number) => {
+    volumeRef.current = v
+    setVolumeState(v)
+    audioRef.current?.setVolume(v)
+    try {
+      localStorage.setItem(VOLUME_KEY, String(v))
+    } catch {
+      // Storage unavailable (private mode): keep the in-memory value.
+    }
+  }, [])
+
   return {
     status,
     fps,
     savedAt,
+    volume,
+    setVolume,
     load,
     importSave,
     exportSave,
     togglePause,
     reset,
+  }
+}
+
+const VOLUME_KEY = 'dgb.volume'
+
+function loadVolume(): number {
+  try {
+    const v = Number(localStorage.getItem(VOLUME_KEY) ?? '0.5')
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5
+  } catch {
+    return 0.5
   }
 }
 

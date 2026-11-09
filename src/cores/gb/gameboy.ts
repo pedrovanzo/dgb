@@ -2,10 +2,12 @@ import type {
   AudioChunk,
   BreakpointDebug,
   Core,
+  MemoryDebug,
   InputState,
   Screen,
   SerialDebug,
 } from '../types.ts'
+import { SAMPLE_RATE } from './apu.ts'
 import { Bus } from './bus.ts'
 import { createCartridge } from './cartridge.ts'
 import { Cpu } from './cpu.ts'
@@ -19,7 +21,9 @@ export interface GameBoyOptions {
 }
 
 /** Original Game Boy (DMG). Starts in post-boot-ROM state; no boot ROM needed. */
-export class GameBoy implements Core, SerialDebug, BreakpointDebug {
+export class GameBoy
+  implements Core, SerialDebug, BreakpointDebug, MemoryDebug
+{
   readonly system = 'dmg' as const
   readonly stateVersion = 1
   readonly frameRate = CLOCK_HZ / CYCLES_PER_FRAME
@@ -73,7 +77,7 @@ export class GameBoy implements Core, SerialDebug, BreakpointDebug {
   }
 
   drainAudio(): AudioChunk {
-    return { sampleRate: 48_000, samples: new Float32Array(0) }
+    return { sampleRate: SAMPLE_RATE, samples: this.machine().bus.apu.drain() }
   }
 
   setInput(input: InputState): void {
@@ -102,6 +106,16 @@ export class GameBoy implements Core, SerialDebug, BreakpointDebug {
 
   drainSerial(): Uint8Array {
     return this.machine().bus.serial.drain()
+  }
+
+  peek(addr: number): number {
+    const { bus } = this.machine()
+    // Cartridge RAM directly, so the test's RAM-enable state doesn't matter.
+    if (addr >= 0xa000 && addr < 0xc000) {
+      const ram = bus.cart.ram
+      return ram.length ? ram[(addr - 0xa000) % ram.length] : 0xff
+    }
+    return bus.read(addr)
   }
 
   drainBreakpoints(): Uint8Array[] {

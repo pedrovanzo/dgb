@@ -11,6 +11,7 @@ import {
   mooneyeDetector,
   runFrames,
   runUntilBreakpointVerdict,
+  runUntilMemoryVerdict,
   runUntilSerialVerdict,
 } from '../testing/harness.ts'
 import {
@@ -74,14 +75,6 @@ const MOONEYE_KNOWN_FAILURES = new Map<string, string>([
     'mooneye/acceptance/ppu/stat_lyc_onoff.gb',
     'Deferred: PPU LCD-on edge cases',
   ],
-  [
-    'mooneye/acceptance/bits/unused_hwio-GS.gb',
-    'Phase 6: APU register masks/defaults',
-  ],
-  [
-    'mooneye/acceptance/boot_hwio-dmgABCmgb.gb',
-    'Phase 6: APU register masks/defaults',
-  ],
 ])
 
 const mooneyeRoms = ['mooneye/acceptance', 'mooneye/emulator-only']
@@ -104,6 +97,24 @@ describe('Mooneye acceptance and MBC tests (DMG)', () => {
           c.maxFrames,
         )
         expect(r.verdict).toBe('pass')
+      },
+      60_000,
+    )
+  }
+})
+
+/** Blargg dmg_sound singles not expected to pass yet, with the reason. */
+const DMG_SOUND_KNOWN_FAILURES = new Map<string, string>([])
+
+describe('Blargg dmg_sound (DMG)', () => {
+  for (const rom of listTestRoms('blargg/dmg_sound')) {
+    const reason = DMG_SOUND_KNOWN_FAILURES.get(rom)
+    const test = reason ? it.fails : it
+    test(
+      reason ? `${rom} (known failure: ${reason})` : rom,
+      () => {
+        const r = runUntilMemoryVerdict(boot(rom), 3_000)
+        expect(r.verdict, r.text).toBe('pass')
       },
       60_000,
     )

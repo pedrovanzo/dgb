@@ -96,6 +96,14 @@ export interface BreakpointDebug {
   drainBreakpoints(): Uint8Array[]
 }
 
+/**
+ * Optional debug surface for reading memory without side effects on test
+ * state. Newer Blargg ROMs (dmg_sound, cgb_sound) report at 0xA000.
+ */
+export interface MemoryDebug {
+  peek(addr: number): number
+}
+
 export function hasSerialDebug(core: Core): core is Core & SerialDebug {
   return typeof (core as Partial<SerialDebug>).drainSerial === 'function'
 }

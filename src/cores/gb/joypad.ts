@@ -17,7 +17,7 @@ const ACTION: Partial<Record<Button, number>> = {
 
 export class Joypad {
   /** P1 select bits (4 = d-pad, 5 = buttons), active low. */
-  private select = 0x30
+  private select = 0x00 // post-boot P1 reads 0xCF
   private dpad = 0x0f
   private action = 0x0f
   private readonly irq: Interrupts
