@@ -35,10 +35,11 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Delivered:** scanline renderer (BG, window with line counter, 10-sprite limit, DMG sprite priority, 8x16), double-buffered screen, variable mode 3 length (SCX, window, Pan Docs sprite penalty), VRAM/OAM access blocking, LY early increment and line-153 quirk, OAM DMA with bus conflicts. `dmg-acid2` matches pixel-for-pixel; 60 of 66 applicable Mooneye acceptance tests pass.
 - **Notes:** HALT wake-up adds no extra M-cycle. Deferred: `lcdon_timing-GS`, `lcdon_write_timing-GS`, `stat_lyc_onoff` (LCD-on edge cases, rarely relied on by games). `oam_dma/sources-GS` needs MBC5 (Phase 5).
 
-## Phase 4 — Browser runner (first milestone) `[ ]`
+## Phase 4 — Browser runner (first milestone) `[x]`
 
 - Web Worker + `OffscreenCanvas`, ROM file picker, keyboard input, ~59.7 fps pacing.
 - **Done when:** `dmg-acid2` renders correctly in the browser on PC.
+- **Delivered:** `src/runner/`. The worker owns the core and the canvas. `FramePacer` holds 59.73 fps on 60/75/120/144 Hz displays. Keyboard is bound by physical key. Open ROM button or drag-and-drop, pause/reset, FPS readout, auto-pause on hidden tab. Verified in headless Chrome: `dmg-acid2` renders correctly at ~59 fps.
 
 ## Phase 5 — Cartridges and battery saves `[ ]`
 

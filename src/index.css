@@ -11,5 +11,59 @@ body {
 }
 
 .app {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 2px dashed transparent;
+  border-radius: 8px;
+}
+
+.app.dragging {
+  border-color: currentColor;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bar h1 {
+  margin: 0 0.5rem 0 0;
+  font-size: 1.5rem;
+}
+
+.screen-host {
+  line-height: 0;
+}
+
+/* Scale up with crisp, unsmoothed pixels. */
+.screen {
+  width: min(640px, 95vw);
+  aspect-ratio: 160 / 144;
+  image-rendering: pixelated;
+  background: #fff;
+}
+
+.status {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.warning {
+  margin: 0;
+  color: #c80;
+}
+
+.controls {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.controls th {
+  text-align: right;
+  padding-right: 0.75rem;
 }
