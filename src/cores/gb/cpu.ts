@@ -40,11 +40,29 @@ export class Cpu {
 
   constructor(bus: Bus) {
     this.bus = bus
+    if (bus.cgb) {
+      // Post-boot-ROM state of a CGB running a CGB game (A = 0x11 is how
+      // games detect color hardware).
+      this.a = 0x11
+      this.f = 0x80
+      this.b = 0x00
+      this.c = 0x00
+      this.d = 0xff
+      this.e = 0x56
+      this.h = 0x00
+      this.l = 0x0d
+    }
   }
 
   /** Execute one instruction, interrupt dispatch, or halted M-cycle. */
   step(): void {
     const bus = this.bus
+    // HDMA blocks and speed switches hold the CPU while the system runs.
+    if (bus.stall > 0) {
+      bus.stall--
+      bus.tick()
+      return
+    }
     if (this.locked) {
       bus.tick()
       return
@@ -600,9 +618,10 @@ export class Cpu {
         return
       }
       case 2:
-        // STOP: consumes its padding byte. Low-power mode and CGB speed
-        // switching arrive with Phase 7.
+        // STOP: consumes its padding byte. With KEY1 armed on CGB it
+        // switches CPU speed; low-power mode is not emulated.
         this.imm8()
+        this.bus.stop()
         return
       default: {
         const e = (this.imm8() << 24) >> 24

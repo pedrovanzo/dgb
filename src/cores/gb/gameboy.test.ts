@@ -20,10 +20,10 @@ import {
   readTestRom,
   writeScreenPng,
 } from '../testing/node.ts'
-import { GameBoy } from './gameboy.ts'
+import { GameBoy, type GameBoyModel } from './gameboy.ts'
 
-function boot(rom: string): GameBoy {
-  const gb = new GameBoy()
+function boot(rom: string, model: GameBoyModel = 'dmg'): GameBoy {
+  const gb = new GameBoy({ model })
   gb.loadRom(readTestRom(rom))
   return gb
 }
@@ -115,6 +115,95 @@ describe('Blargg dmg_sound (DMG)', () => {
       () => {
         const r = runUntilMemoryVerdict(boot(rom), 3_000)
         expect(r.verdict, r.text).toBe('pass')
+      },
+      60_000,
+    )
+  }
+})
+
+// --- CGB ---
+
+describe('Blargg (CGB)', () => {
+  it.each(blarggCases.map((c) => [c.rom, c]))(
+    '%s',
+    (_, c) => {
+      if (c.kind !== 'blargg-serial') throw new Error('unexpected case kind')
+      const r = runUntilSerialVerdict(
+        boot(c.rom, 'cgb'),
+        blarggDetector,
+        c.maxFrames,
+      )
+      expect(r.verdict, r.text).toBe('pass')
+    },
+    120_000,
+  )
+})
+
+describe('Screen tests (CGB)', () => {
+  // dmg-acid2 on CGB needs DMG compatibility mode (boot ROM palettes).
+  const cases = acid2Cases.cgb.filter((c) => c.rom.endsWith('.gbc'))
+  it.each(cases.map((c) => [c.rom, c]))('%s', (_, c) => {
+    if (c.kind !== 'screen') throw new Error('unexpected case kind')
+    const gb = boot(c.rom, 'cgb')
+    runFrames(gb, c.frames)
+    const actual = gb.getFramebuffers()[0]
+    const diff = compareScreens(actual, readReferenceScreen(c.reference))
+    if (diff.mismatches > 0) {
+      const name = `cgb_${c.rom.replace(/[/.]/g, '_')}`
+      const path = writeScreenPng(name, actual)
+      expect.fail(
+        `${diff.mismatches} pixels differ, first ${JSON.stringify(diff.first)}; actual saved to ${path}`,
+      )
+    }
+  })
+})
+
+/** Blargg cgb_sound singles not expected to pass yet, with the reason. */
+const CGB_SOUND_KNOWN_FAILURES = new Map<string, string>([])
+
+describe('Blargg cgb_sound (CGB)', () => {
+  for (const rom of listTestRoms('blargg/cgb_sound')) {
+    const reason = CGB_SOUND_KNOWN_FAILURES.get(rom)
+    const test = reason ? it.fails : it
+    test(
+      reason ? `${rom} (known failure: ${reason})` : rom,
+      () => {
+        const r = runUntilMemoryVerdict(boot(rom, 'cgb'), 3_000)
+        expect(r.verdict, r.text).toBe('pass')
+      },
+      60_000,
+    )
+  }
+})
+
+/** Mooneye tests not expected to pass on CGB yet, with the reason. */
+const MOONEYE_CGB_KNOWN_FAILURES = new Map<string, string>([
+  [
+    'mooneye/acceptance/ppu/stat_lyc_onoff.gb',
+    'Deferred: PPU LCD-on edge cases',
+  ],
+])
+
+const mooneyeCgbRoms = ['mooneye/acceptance', 'mooneye/emulator-only']
+  .flatMap((dir) => listTestRoms(dir))
+  .filter((rom) => mooneyeAppliesTo(rom, 'cgb'))
+
+describe('Mooneye acceptance and MBC tests (CGB)', () => {
+  for (const rom of mooneyeCgbRoms) {
+    const reason = MOONEYE_CGB_KNOWN_FAILURES.get(rom)
+    const test = reason ? it.fails : it
+    test(
+      reason ? `${rom} (known failure: ${reason})` : rom,
+      () => {
+        const c = mooneyeCase(rom)
+        if (c.kind !== 'mooneye-breakpoint')
+          throw new Error('unexpected case kind')
+        const r = runUntilBreakpointVerdict(
+          boot(rom, 'cgb'),
+          mooneyeDetector,
+          c.maxFrames,
+        )
+        expect(r.verdict).toBe('pass')
       },
       60_000,
     )

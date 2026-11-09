@@ -9,14 +9,18 @@ export interface CreatedCore {
   warning?: string
 }
 
-/** Picks a core for the ROM and loads it. Throws on unsupported ROMs. */
+/**
+ * Picks a core for the ROM and loads it. Throws on unsupported ROMs.
+ * Color-capable cartridges (header 0x143 bit 7) run on the CGB model; the rest
+ * run on the DMG model.
+ */
 export function createCore(rom: Uint8Array): CreatedCore {
   const header = parseHeader(rom)
-  const core = new GameBoy()
+  const model = header.cgbFlag & 0x80 ? 'cgb' : 'dmg'
+  const core = new GameBoy({ model })
   core.loadRom(rom)
-  const warning =
-    header.cgbFlag === 0xc0
-      ? 'Game Boy Color-only game: color support arrives in Phase 7.'
-      : undefined
-  return { core, title: header.title || 'Untitled', warning }
+  // CGB titles are 11-15 bytes; the rest of the field is the manufacturer
+  // code and flag.
+  const title = model === 'cgb' ? header.title.slice(0, 15) : header.title
+  return { core, title: title.trim() || 'Untitled' }
 }

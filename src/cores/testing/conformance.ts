@@ -57,7 +57,8 @@ export const acid2Cases: Record<'dmg' | 'cgb', ConformanceCase[]> = {
       kind: 'screen',
       rom: 'acid2/cgb-acid2.gbc',
       reference: 'acid2/cgb-acid2.reference.png',
-      frames: 10,
+      // Clears all VRAM/WRAM banks with the LCD off before drawing.
+      frames: 60,
     },
     {
       kind: 'screen',

@@ -11,7 +11,10 @@
 export const SAMPLE_RATE = 48_000
 const CLOCK_HZ = 4_194_304
 
-/** Bit of the timer's internal counter that clocks the frame sequencer. */
+/**
+ * Bit of the timer's internal counter that clocks the frame sequencer (512
+ * Hz). In CGB double speed the counter runs twice as fast, so bit 13 is used.
+ */
 const FRAME_SEQUENCER_BIT = 1 << 12
 
 /** OR masks applied when reading 0xFF10-0xFF2F (write-only / unused bits). */
@@ -223,12 +226,12 @@ class Wave extends Channel {
     this.timer = (2048 - this.freq) * 2 + 6
   }
 
-  /** Advances 4 T-cycles that start at absolute T-cycle `start`. */
-  tick(start: number): void {
+  /** Advances `cycles` T-cycles that start at absolute T-cycle `start`. */
+  tick(start: number, cycles: number): void {
     if (!this.enabled) return
-    this.timer -= 4
+    this.timer -= cycles
     while (this.timer <= 0) {
-      const at = start + 4 + this.timer
+      const at = start + cycles + this.timer
       this.timer += (2048 - this.freq) * 2
       this.pos = (this.pos + 1) & 31
       this.sample = this.ram[this.pos >> 1]
@@ -314,8 +317,19 @@ export class Apu {
   private out = new Float32Array(4096)
   private outLen = 0
 
-  constructor() {
+  /** CGB model: different wave RAM and power-off rules. */
+  private readonly cgb: boolean
+  /** Counter bit for the frame sequencer (bit 13 in CGB double speed). */
+  private frameBit = FRAME_SEQUENCER_BIT
+
+  constructor(cgb = false) {
+    this.cgb = cgb
     this.initPostBoot()
+  }
+
+  /** CGB speed switch. */
+  setDoubleSpeed(on: boolean): void {
+    this.frameBit = on ? FRAME_SEQUENCER_BIT << 1 : FRAME_SEQUENCER_BIT
   }
 
   /** Register state left by the DMG boot ROM (after its startup chime). */
@@ -348,22 +362,23 @@ export class Apu {
   }
 
   /**
-   * Advances one M-cycle. `before`/`after` are the timer's internal counter
-   * around this tick; a falling edge of bit 12 steps the frame sequencer.
+   * Advances one M-cycle of `cycles` T-cycles (4, or 2 in CGB double speed).
+   * `before`/`after` are the timer's internal counter around this tick; a
+   * falling edge of the frame-sequencer bit steps the sequencer.
    */
-  tick(before: number, after: number): void {
+  tick(before: number, after: number, cycles = 4): void {
     if (this.power) {
-      if (before & FRAME_SEQUENCER_BIT && !(after & FRAME_SEQUENCER_BIT))
+      if (before & this.frameBit && !(after & this.frameBit))
         this.stepFrameSequencer()
-      this.sq1.tick(4)
-      this.sq2.tick(4)
-      this.wave.tick(this.now)
-      this.noise.tick(4)
+      this.sq1.tick(cycles)
+      this.sq2.tick(cycles)
+      this.wave.tick(this.now, cycles)
+      this.noise.tick(cycles)
     }
-    this.now += 4
-    // Averaging every other M-cycle (262 kHz) is ample for a 48 kHz output.
-    if (this.now & 4) this.accumulate()
-    this.phase += SAMPLE_RATE * 4
+    this.now += cycles
+    // Averaging every 8 T-cycles (~524 kHz) is ample for a 48 kHz output.
+    if ((this.now & 7) === 0) this.accumulate()
+    this.phase += SAMPLE_RATE * cycles
     if (this.phase >= CLOCK_HZ) {
       this.phase -= CLOCK_HZ
       this.emit()
@@ -372,7 +387,7 @@ export class Apu {
 
   /** DIV write: resetting the counter can produce a falling edge. */
   divReset(before: number): void {
-    if (this.power && before & FRAME_SEQUENCER_BIT) this.stepFrameSequencer()
+    if (this.power && before & this.frameBit) this.stepFrameSequencer()
   }
 
   private stepFrameSequencer(): void {
@@ -460,13 +475,14 @@ export class Apu {
   private readWave(addr: number): number {
     const w = this.wave
     if (!w.enabled) return w.ram[addr - 0xff30]
+    if (this.cgb) return w.ram[w.pos >> 1]
     return this.waveAccessible() ? w.ram[w.pos >> 1] : 0xff
   }
 
   private writeWave(addr: number, value: number): void {
     const w = this.wave
     if (!w.enabled) w.ram[addr - 0xff30] = value
-    else if (this.waveAccessible()) w.ram[w.pos >> 1] = value
+    else if (this.cgb || this.waveAccessible()) w.ram[w.pos >> 1] = value
   }
 
   private waveAccessible(): boolean {
@@ -478,6 +494,7 @@ export class Apu {
     if (addr >= 0xff30) return this.writeWave(addr, value)
     if (addr === 0xff26) return this.writePower(value)
     if (!this.power) {
+      if (this.cgb) return
       // DMG: length counters stay writable while powered off.
       if (addr === 0xff11) this.sq1.length.load(value & 0x3f)
       else if (addr === 0xff16) this.sq2.length.load(value & 0x3f)
@@ -524,7 +541,8 @@ export class Apu {
         this.wave.freq = (this.wave.freq & 0x700) | value
         return
       case 0xff1e:
-        if (value & 0x80 && this.wave.enabled) this.corruptWaveOnRetrigger()
+        if (value & 0x80 && this.wave.enabled && !this.cgb)
+          this.corruptWaveOnRetrigger()
         return this.wave.writeControl(value, lengthStepNext)
       case 0xff20:
         return this.noise.length.load(value & 0x3f)
@@ -566,6 +584,8 @@ export class Apu {
       this.sq1.duty = this.sq2.duty = 0
       this.sq1.enabled = this.sq2.enabled = false
       this.wave.enabled = this.noise.enabled = false
+      // CGB clears the length counters too.
+      if (this.cgb) for (const ch of this.channels) ch.length.value = 0
       this.power = false
     } else if (!this.power && on) {
       this.power = true

@@ -55,10 +55,13 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 - **Delivered:** `src/cores/gb/apu.ts` has 2 squares (one with sweep), wave and noise, a DIV-clocked frame sequencer (including the DIV-write edge), DMG power-off rules, wave RAM access while playing, retrigger corruption and post-boot register state. The mixer averages at 262 kHz, outputs 48 kHz stereo and applies a DC-blocking high-pass. All 12 Blargg `dmg_sound` tests pass. Mooneye `unused_hwio-GS` and `boot_hwio-dmgABCmgb` now pass too. The worker sends samples straight to an `AudioWorklet` over a `MessageChannel`, so `SharedArrayBuffer` is not needed (GitHub Pages can't send COOP/COEP headers). `AudioRing` prebuffers 60 ms and nudges the playback rate by up to ±0.5% to follow the clock drift between display and audio device. Volume slider, saved in `localStorage`. A headless Chrome smoke test measured a 440 Hz test tone at 439.5 Hz.
 - **Notes:** the APU costs ~35% of emulation time (~1,100 fps headless on PC, ~19x realtime). Revisit in the performance pass if phones struggle. Blargg dmg_sound ROMs report through cartridge RAM at `0xA000`, read by `runUntilMemoryVerdict`.
 
-## Phase 7 — GBC `[ ]`
+## Phase 7 — GBC `[x]`
 
 - Double speed, CGB palettes, VRAM/WRAM banking, HDMA.
 - **Done when:** `cgb-acid2` passes.
+- **Delivered:** `GameBoy({ model: 'cgb' })`. It adds VRAM (2) and WRAM (8) banking, BG attributes (bank, palette, flips, priority), 8+8 RGB555 palettes with auto-increment and the mode-3 lockout, CGB sprite priority (OAM order, LCDC.0 as master priority), and general-purpose plus HBlank HDMA with CPU stall. KEY1/STOP speed switching drives the PPU and APU at 2 T-cycles per M-cycle, with the frame sequencer on DIV bit 13. CGB boot registers are set (A = 0x11). APU: CGB wave RAM access and power-off rules. `createCore` runs color-capable ROMs (header 0x143 bit 7) on CGB and the rest on DMG.
+- **Results:** `cgb-acid2` matches pixel-for-pixel (it needs 60 frames because it clears every bank with the LCD off first) and renders in Chrome. Blargg `cpu_instrs` and `instr_timing` pass on CGB. All 12 `cgb_sound` tests pass. Mooneye on CGB passes everything applicable except `stat_lyc_onoff` (the same deferred LCD-on case as DMG).
+- **Deferred:** DMG compatibility mode, i.e. DMG games colorized by the CGB boot ROM (`dmg-acid2.cgb-reference.png`). DMG-only games stay on the DMG model. No color correction (raw RGB555 to RGB888); a display option can come later. The CGB post-boot DIV value is not calibrated (no Mooneye test covers it).
 
 ## Phase 8 — PWA and mobile `[ ]`
 

@@ -15,16 +15,23 @@ import { Cpu } from './cpu.ts'
 export const CLOCK_HZ = 4_194_304
 export const CYCLES_PER_FRAME = 70_224
 
+export type GameBoyModel = 'dmg' | 'cgb'
+
 export interface GameBoyOptions {
+  /** Hardware to emulate (default `dmg`). */
+  model?: GameBoyModel
   /** Wall clock in ms since the Unix epoch, for the MBC3 RTC (tests inject one). */
   now?: () => number
 }
 
-/** Original Game Boy (DMG). Starts in post-boot-ROM state; no boot ROM needed. */
+/**
+ * Game Boy (DMG) or Game Boy Color (CGB). Starts in post-boot-ROM state; no
+ * boot ROM needed.
+ */
 export class GameBoy
   implements Core, SerialDebug, BreakpointDebug, MemoryDebug
 {
-  readonly system = 'dmg' as const
+  readonly system: GameBoyModel
   readonly stateVersion = 1
   readonly frameRate = CLOCK_HZ / CYCLES_PER_FRAME
 
@@ -37,6 +44,7 @@ export class GameBoy
 
   constructor(options: GameBoyOptions = {}) {
     this.now = options.now ?? (() => Date.now())
+    this.system = options.model ?? 'dmg'
   }
 
   loadRom(rom: Uint8Array): void {
@@ -52,7 +60,7 @@ export class GameBoy
     const cart = createCartridge(this.rom, {
       clock: { cycles: () => bus?.cycles ?? 0, now: this.now },
     })
-    bus = new Bus(cart)
+    bus = new Bus(cart, this.system === 'cgb')
     if (save) cart.loadSaveData(save)
     bus.timer.counter = 0xabcc // DIV state at 0x0100 on DMG A/B/C
     this.bus = bus

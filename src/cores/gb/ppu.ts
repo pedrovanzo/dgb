@@ -23,15 +23,30 @@ interface LineSprite {
   index: number
 }
 
+/** 5-bit color channel to 8-bit (matches the cgb-acid2 reference). */
+function expand5(c: number): number {
+  return (c << 3) | (c >> 2)
+}
+
 /**
- * DMG pixel processing unit: scanline renderer with dot-based mode timing.
+ * DMG/CGB pixel processing unit: scanline renderer with dot-based mode timing.
  *
  * Each line renders at the end of mode 3 using register values at that moment.
  * Mode 3 length varies with SCX, the window and sprites (Pan Docs penalty
  * algorithm), which shifts HBlank and STAT timing like real hardware.
  */
 export class Ppu {
-  readonly vram = new Uint8Array(0x2000)
+  /** Two 8 KiB banks on CGB (bank 1 holds BG attributes and extra tiles). */
+  readonly vram = new Uint8Array(0x4000)
+  /** CGB palette RAM: 8 palettes x 4 colors x 2 bytes (RGB555 little-endian). */
+  readonly bgPalette = new Uint8Array(64).fill(0xff)
+  readonly objPalette = new Uint8Array(64).fill(0xff)
+  /** CGB palette index registers (BCPS/OCPS): bit 7 = auto-increment. */
+  bcps = 0
+  ocps = 0
+  /** Called when a visible line enters HBlank (drives CGB HBlank DMA). */
+  onHblank: (() => void) | null = null
+  readonly cgb: boolean
   readonly oam = new Uint8Array(0xa0)
   /** Last completed frame (presented). */
   readonly screen: Screen = {
@@ -73,10 +88,13 @@ export class Ppu {
   private windowOnLine = false
   private sprites: LineSprite[] = []
   private readonly bgIds = new Uint8Array(SCREEN_WIDTH)
+  /** CGB: BG attribute priority bit per pixel. */
+  private readonly bgPriority = new Uint8Array(SCREEN_WIDTH)
   private readonly irq: Interrupts
 
-  constructor(irq: Interrupts) {
+  constructor(irq: Interrupts, cgb = false) {
     this.irq = irq
+    this.cgb = cgb
     // Post-boot: the boot ROM hands over late in VBlank, on line 153.
     this.line = LINES_PER_FRAME - 1
     this.dot = 400
@@ -98,10 +116,10 @@ export class Ppu {
     return this.mode < 2
   }
 
-  /** Advance one M-cycle (4 dots). */
-  tick(): void {
+  /** Advance one M-cycle: 4 dots, or 2 in CGB double speed. */
+  tick(dots = 4): void {
     if (!this.enabled) return
-    this.dot += 4
+    this.dot += dots
 
     if (this.line < SCREEN_HEIGHT) {
       if (
@@ -111,8 +129,10 @@ export class Ppu {
         if (this.dot >= MODE2_DOTS) this.startMode3()
       }
       if (this.mode === 3 && this.dot >= this.mode3End) {
-        this.renderLine()
+        if (this.cgb) this.renderLineCgb()
+        else this.renderLine()
         this.mode = 0
+        this.onHblank?.()
       }
     } else if (this.line === LINES_PER_FRAME - 1 && this.dot >= 4) {
       this.ly = 0 // LY reads 0 for most of line 153
@@ -153,8 +173,12 @@ export class Ppu {
   private startMode3(): void {
     this.mode = 3
     this.scanOam()
+    // On CGB, LCDC bit 0 is BG priority, not BG/window enable.
+    const windowBits = this.cgb ? 0x20 : 0x21
     this.windowOnLine =
-      (this.lcdc & 0x21) === 0x21 && this.windowYTriggered && this.wx <= 166
+      (this.lcdc & windowBits) === windowBits &&
+      this.windowYTriggered &&
+      this.wx <= 166
     this.mode3End = MODE2_DOTS + MODE3_BASE_DOTS + this.mode3Penalty()
   }
 
@@ -296,6 +320,116 @@ export class Ppu {
           break
         }
       }
+    }
+  }
+
+  /** RGB555 palette entry to RGBA at `out[i]`. */
+  private putColor(
+    out: Uint8ClampedArray,
+    i: number,
+    pal: Uint8Array,
+    entry: number,
+  ): void {
+    const c = pal[entry * 2] | (pal[entry * 2 + 1] << 8)
+    out[i] = expand5(c & 0x1f)
+    out[i + 1] = expand5((c >> 5) & 0x1f)
+    out[i + 2] = expand5((c >> 10) & 0x1f)
+    out[i + 3] = 0xff
+  }
+
+  private renderLineCgb(): void {
+    const ly = this.line
+    const out = this.back
+    const ids = this.bgIds
+    const prio = this.bgPriority
+    const lcdc = this.lcdc
+    const vram = this.vram
+    const rowBase = ly * SCREEN_WIDTH * 4
+    const bgMap = lcdc & 0x08 ? 0x1c00 : 0x1800
+    const winMap = lcdc & 0x40 ? 0x1c00 : 0x1800
+    const winStart = this.wx - 7
+    const bgY = (ly + this.scy) & 0xff
+    const winY = this.windowLine
+
+    // Background and window (always drawn on CGB).
+    for (let x = 0; x < SCREEN_WIDTH; x++) {
+      let map: number
+      let px: number
+      let py: number
+      if (this.windowOnLine && x >= winStart) {
+        map = winMap
+        px = x - winStart
+        py = winY
+      } else {
+        map = bgMap
+        px = (x + this.scx) & 0xff
+        py = bgY
+      }
+      const mapAddr = map + (py >> 3) * 32 + (px >> 3)
+      const index = vram[mapAddr]
+      const attr = vram[0x2000 + mapAddr]
+      const tileBase =
+        (attr & 0x08 ? 0x2000 : 0) +
+        (lcdc & 0x10 ? index * 16 : 0x1000 + ((index << 24) >> 24) * 16)
+      const row = attr & 0x40 ? 7 - (py & 7) : py & 7
+      const col = attr & 0x20 ? 7 - (px & 7) : px & 7
+      const lo = vram[tileBase + row * 2]
+      const hi = vram[tileBase + row * 2 + 1]
+      const bit = 7 - col
+      const id = (((hi >> bit) & 1) << 1) | ((lo >> bit) & 1)
+      ids[x] = id
+      prio[x] = attr & 0x80 ? 1 : 0
+      this.putColor(out, rowBase + x * 4, this.bgPalette, (attr & 7) * 4 + id)
+    }
+    if (this.windowOnLine) this.windowLine++
+
+    // Sprites: CGB priority is OAM order only.
+    if (!(lcdc & 0x02) || this.sprites.length === 0) return
+    const masterPriority = (lcdc & 0x01) !== 0
+    for (let x = 0; x < SCREEN_WIDTH; x++) {
+      for (const s of this.sprites) {
+        const col = x - (s.x - 8)
+        if (col < 0 || col > 7) continue
+        const tileBase = (s.flags & 0x08 ? 0x2000 : 0) + s.tile * 16
+        const lo = vram[tileBase + s.row * 2]
+        const hi = vram[tileBase + s.row * 2 + 1]
+        const bit = s.flags & 0x20 ? col : 7 - col
+        const id = (((hi >> bit) & 1) << 1) | ((lo >> bit) & 1)
+        if (id === 0) continue
+        const bgWins =
+          masterPriority &&
+          ids[x] !== 0 &&
+          (prio[x] !== 0 || (s.flags & 0x80) !== 0)
+        if (!bgWins)
+          this.putColor(
+            out,
+            rowBase + x * 4,
+            this.objPalette,
+            (s.flags & 7) * 4 + id,
+          )
+        break
+      }
+    }
+  }
+
+  // --- CGB palette registers (inaccessible during mode 3) ---
+
+  readPaletteData(obj: boolean): number {
+    if (this.enabled && this.mode === 3) return 0xff
+    return obj
+      ? this.objPalette[this.ocps & 0x3f]
+      : this.bgPalette[this.bcps & 0x3f]
+  }
+
+  writePaletteData(obj: boolean, value: number): void {
+    const spec = obj ? this.ocps : this.bcps
+    if (!this.enabled || this.mode !== 3) {
+      ;(obj ? this.objPalette : this.bgPalette)[spec & 0x3f] = value
+    }
+    if (spec & 0x80) {
+      const next = (spec & 0x80) | ((spec + 1) & 0x3f)
+      if (obj) this.ocps = next
+      else this.bcps = next
     }
   }
 
